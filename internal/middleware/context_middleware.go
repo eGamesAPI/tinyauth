@@ -95,18 +95,10 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			}
 		}
 
-		// X-Api-Key takes priority when present: it lets a client carry
-		// TinyAuth basic credentials alongside an application token in the
-		// Authorization header (e.g. "Authorization: Bearer ..." APIs behind
-		// the proxy). A malformed or non-Basic X-Api-Key is rejected WITHOUT
-		// falling back to Authorization: a half-configured client must fail
-		// loudly instead of silently degrading. Presence is checked via the
-		// header map, because Get cannot tell an absent header from an
-		// explicitly empty one.
-		if apiKeyHeaders := c.Request.Header["X-Api-Key"]; len(apiKeyHeaders) > 0 {
+		if apiKeyHeaders := c.Request.Header["X-Tinyauth-Authorization"]; len(apiKeyHeaders) > 0 {
 			username, password, ok := parseAPIKeyBasicAuth(apiKeyHeaders[0])
 			if !ok {
-				m.log.App.Debug().Msg("Invalid basic auth in X-Api-Key header")
+				m.log.App.Debug().Msg("Invalid basic auth in X-Tinyauth-Authorization header")
 				c.AbortWithStatus(http.StatusUnauthorized)
 				return
 			}
@@ -270,9 +262,8 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 	return userContext, cookie, nil
 }
 
-// basicAuth authenticates a local user by username and password, handles
-// account lockout bookkeeping, and returns the user context plus any
-// response headers (e.g. lock hints) to set on the request.
+// basicAuth authenticates a local user and returns the user context with
+// any response headers to set.
 func (m *ContextMiddleware) basicAuth(username string, password string) (*model.UserContext, map[string]string, error) {
 	headers := make(map[string]string)
 	userContext := new(model.UserContext)
@@ -396,9 +387,8 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 	return &uctx, nil
 }
 
-// parseAPIKeyBasicAuth parses an X-Api-Key value in the form
-// "Basic base64(username:password)". ok is false for a wrong scheme or a
-// malformed payload: callers treat that as a hard reject without fallback.
+// parseAPIKeyBasicAuth parses an X-Tinyauth-Authorization value in the
+// form "Basic base64(username:password)".
 func parseAPIKeyBasicAuth(header string) (username string, password string, ok bool) {
 	const prefix = "Basic "
 

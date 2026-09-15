@@ -247,10 +247,10 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Valid X-Api-Key sets authenticated local context",
+			description: "Valid X-Tinyauth-Authorization sets authenticated local context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Api-Key", basicAuthHeader("testuser", "password"))
+				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -260,10 +260,10 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "X-Api-Key takes priority over Authorization",
+			description: "X-Tinyauth-Authorization takes priority over Authorization",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Api-Key", basicAuthHeader("testuser", "password"))
+				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("testuser", "password"))
 				req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
 				userCtx, _ := args.do(req)
 
@@ -273,10 +273,10 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Malformed X-Api-Key is rejected without fallback to Authorization",
+			description: "Malformed header is rejected without fallback to Authorization",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Api-Key", "Basic !!!not-base64!!!")
+				req.Header.Set("X-Tinyauth-Authorization", "Basic !!!not-base64!!!")
 				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
 				userCtx, recorder := args.do(req)
 
@@ -285,10 +285,10 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Non-Basic scheme in X-Api-Key is rejected without fallback",
+			description: "Non-Basic scheme is rejected without fallback",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Api-Key", "Bearer some-token")
+				req.Header.Set("X-Tinyauth-Authorization", "Bearer some-token")
 				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
 				userCtx, recorder := args.do(req)
 
@@ -297,10 +297,10 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Explicitly empty X-Api-Key is rejected without fallback",
+			description: "Explicitly empty header is rejected without fallback",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header["X-Api-Key"] = []string{""}
+				req.Header["X-Tinyauth-Authorization"] = []string{""}
 				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
 				userCtx, recorder := args.do(req)
 
