@@ -18,6 +18,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestContextMiddleware(t *testing.T) {
@@ -25,6 +26,13 @@ func TestContextMiddleware(t *testing.T) {
 	log.Init()
 
 	cfg, runtime := test.CreateTestConfigs(t)
+
+	colonPasswd, err := bcrypt.GenerateFromPassword([]byte("pa:ss"), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	runtime.LocalUsers = append(runtime.LocalUsers, model.LocalUser{
+		Username: "colonuser",
+		Password: string(colonPasswd),
+	})
 
 	basicAuthHeader := func(username, password string) string {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
@@ -269,6 +277,18 @@ func TestContextMiddleware(t *testing.T) {
 
 				require.NotNil(t, userCtx)
 				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.True(t, userCtx.Authenticated)
+			},
+		},
+		{
+			description: "Password containing a colon keeps everything after the first colon",
+			run: func(t *testing.T, args runArgs) {
+				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("colonuser", "pa:ss"))
+				userCtx, _ := args.do(req)
+
+				require.NotNil(t, userCtx)
+				assert.Equal(t, "colonuser", userCtx.GetUsername())
 				assert.True(t, userCtx.Authenticated)
 			},
 		},

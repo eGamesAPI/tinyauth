@@ -96,7 +96,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		if apiKeyHeaders := c.Request.Header["X-Tinyauth-Authorization"]; len(apiKeyHeaders) > 0 {
-			username, password, ok := parseAPIKeyBasicAuth(apiKeyHeaders[0])
+			username, password, ok := parseBasicAuthHeaderValue(apiKeyHeaders[0])
 			if !ok {
 				m.log.App.Debug().Msg("Invalid basic auth in X-Tinyauth-Authorization header")
 				c.AbortWithStatus(http.StatusUnauthorized)
@@ -387,9 +387,9 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 	return &uctx, nil
 }
 
-// parseAPIKeyBasicAuth parses an X-Tinyauth-Authorization value in the
+// parseBasicAuthHeaderValue parses an X-Tinyauth-Authorization value in the
 // form "Basic base64(username:password)".
-func parseAPIKeyBasicAuth(header string) (username string, password string, ok bool) {
+func parseBasicAuthHeaderValue(header string) (username string, password string, ok bool) {
 	const prefix = "Basic "
 
 	if len(header) < len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
