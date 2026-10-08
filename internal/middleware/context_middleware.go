@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -90,38 +89,26 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				c.Set("context", userContext)
 				c.Next()
 				return
-			} else {
-				m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 			}
+
+			m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 		}
 
-		if apiKeyHeaders := c.Request.Header["X-Tinyauth-Authorization"]; len(apiKeyHeaders) > 0 {
-			username, password, ok := parseBasicAuthHeaderValue(apiKeyHeaders[0])
-			if !ok {
-				m.log.App.Debug().Msg("Invalid basic auth in X-Tinyauth-Authorization header")
-				c.AbortWithStatus(http.StatusUnauthorized)
-				return
-			}
+		authHeader := c.GetHeader("x-tinyauth-authorization")
 
-			userContext, headers, err := m.basicAuth(username, password)
-			if err != nil {
-				m.log.App.Error().Msgf("Error authenticating basic auth: %v", err)
+		if authHeader == "" {
+			authHeader = c.GetHeader("Authorization")
+		}
+
+		if authHeader != "" {
+			username, password, ok := utils.ParseBasicAuth(authHeader)
+
+			if !ok {
+				m.log.App.Debug().Msgf("Error authenticating with basic auth: %s", authHeader)
 				c.Next()
 				return
 			}
 
-			for k, v := range headers {
-				c.Header(k, v)
-			}
-
-			c.Set("context", userContext)
-			c.Next()
-			return
-		}
-
-		username, password, ok := c.Request.BasicAuth()
-
-		if ok {
 			userContext, headers, err := m.basicAuth(username, password)
 
 			if err != nil {
@@ -385,26 +372,4 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 	}
 
 	return &uctx, nil
-}
-
-// parseBasicAuthHeaderValue parses an X-Tinyauth-Authorization value in the
-// form "Basic base64(username:password)".
-func parseBasicAuthHeaderValue(header string) (username string, password string, ok bool) {
-	const prefix = "Basic "
-
-	if len(header) < len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
-		return "", "", false
-	}
-
-	payload, err := base64.StdEncoding.DecodeString(header[len(prefix):])
-	if err != nil {
-		return "", "", false
-	}
-
-	username, password, ok = strings.Cut(string(payload), ":")
-	if !ok {
-		return "", "", false
-	}
-
-	return username, password, true
 }

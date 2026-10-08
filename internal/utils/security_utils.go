@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	_ "unsafe" // for linkname
+
 	"github.com/google/uuid"
 )
 
@@ -116,3 +118,8 @@ func GenerateString(length int) string {
 	rand.Read(src)
 	return base64.RawURLEncoding.EncodeToString(src)[:length]
 }
+
+// We are now in the hall of shame of Go as well.
+//
+//go:linkname ParseBasicAuth net/http.parseBasicAuth
+func ParseBasicAuth(auth string) (username, password string, ok bool)

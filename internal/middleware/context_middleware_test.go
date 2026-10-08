@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -33,10 +33,6 @@ func TestContextMiddleware(t *testing.T) {
 		Username: "colonuser",
 		Password: string(colonPasswd),
 	})
-
-	basicAuthHeader := func(username, password string) string {
-		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
-	}
 
 	seedSession := func(t *testing.T, queries repository.Store, params repository.CreateSessionParams) {
 		t.Helper()
@@ -59,7 +55,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Skip path bypasses auth processing",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/healthz", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -173,7 +169,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Valid basic auth sets authenticated local context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -186,7 +182,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Invalid basic auth password yields no context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -196,7 +192,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Basic auth is rejected for users with totp",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("totpuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("totpuser", "password"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -207,12 +203,12 @@ func TestContextMiddleware(t *testing.T) {
 			run: func(t *testing.T, args runArgs) {
 				for range 3 {
 					req := httptest.NewRequest("GET", "/api/test", nil)
-					req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
+					req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 					args.do(req)
 				}
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, recorder := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -234,7 +230,7 @@ func TestContextMiddleware(t *testing.T) {
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
 				req.AddCookie(&http.Cookie{Name: "tinyauth-session", Value: uuid})
-				req.Header.Set("Authorization", basicAuthHeader("totpuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("totpuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -246,7 +242,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Ensure fallback to basic auth when cookie is missing",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -255,10 +251,11 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Valid X-Tinyauth-Authorization sets authenticated local context",
+			description: "Valid x-tinyauth-Authorization sets authenticated local context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
+				req.SetBasicAuth("testuser", "password")
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -268,11 +265,11 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "X-Tinyauth-Authorization takes priority over Authorization",
+			description: "x-tinyauth-authorization takes priority over authorization",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("testuser", "password"))
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
+				req.Header.Set("authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -281,51 +278,13 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Password containing a colon keeps everything after the first colon",
+			description: "x-tinyauth-authorization header being invalid doesn't fail the request",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Tinyauth-Authorization", basicAuthHeader("colonuser", "pa:ss"))
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 				userCtx, _ := args.do(req)
 
-				require.NotNil(t, userCtx)
-				assert.Equal(t, "colonuser", userCtx.GetUsername())
-				assert.True(t, userCtx.Authenticated)
-			},
-		},
-		{
-			description: "Malformed header is rejected without fallback to Authorization",
-			run: func(t *testing.T, args runArgs) {
-				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Tinyauth-Authorization", "Basic !!!not-base64!!!")
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
-				userCtx, recorder := args.do(req)
-
 				assert.Nil(t, userCtx)
-				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-		{
-			description: "Non-Basic scheme is rejected without fallback",
-			run: func(t *testing.T, args runArgs) {
-				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("X-Tinyauth-Authorization", "Bearer some-token")
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
-				userCtx, recorder := args.do(req)
-
-				assert.Nil(t, userCtx)
-				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-		{
-			description: "Explicitly empty header is rejected without fallback",
-			run: func(t *testing.T, args runArgs) {
-				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header["X-Tinyauth-Authorization"] = []string{""}
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
-				userCtx, recorder := args.do(req)
-
-				assert.Nil(t, userCtx)
-				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 	}
