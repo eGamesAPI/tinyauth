@@ -6,10 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"regexp"
 	"strings"
-
-	_ "unsafe" // for linkname
 
 	"github.com/google/uuid"
 )
@@ -119,7 +118,10 @@ func GenerateString(length int) string {
 	return base64.RawURLEncoding.EncodeToString(src)[:length]
 }
 
-// We are now in the hall of shame of Go as well.
-//
-//go:linkname ParseBasicAuth net/http.parseBasicAuth
-func ParseBasicAuth(auth string) (username, password string, ok bool)
+func ParseBasicAuth(auth string) (username, password string, ok bool) {
+	req := &http.Request{
+		Header: make(http.Header),
+	}
+	req.Header.Set("Authorization", auth)
+	return req.BasicAuth()
+}
