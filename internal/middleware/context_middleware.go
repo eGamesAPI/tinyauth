@@ -104,7 +104,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			username, password, ok := utils.ParseBasicAuth(authHeader)
 
 			if !ok {
-				m.log.App.Debug().Msgf("Error authenticating with basic auth: %s", authHeader)
+				m.log.App.Debug().Msg("Error authenticating with basic auth")
 				c.Next()
 				return
 			}
